@@ -930,6 +930,32 @@ many lines.  Without a prefix argument, accept only the first line."
         (minuet--display-suggestion (list remaining-suggestion) 0)))))
 
 ;;;###autoload
+(defun minuet-accept-suggestion-word (&optional n)
+  "Accept N words of the current suggestion.
+When called interactively with a numeric prefix argument, accept that
+many words.  Without a prefix argument, accept only the first word."
+  (interactive "p")
+  (when (and minuet--current-suggestions
+             minuet--current-overlay)
+    (let* ((suggestion (nth minuet--current-suggestion-index
+                            minuet--current-suggestions))
+           (n (or n 1))
+           (word-boundary-table find-word-boundary-function-table)
+           selected-text
+           remaining-text)
+      (with-temp-buffer
+        (insert suggestion)
+        (goto-char (point-min))
+        (setq-local find-word-boundary-function-table word-boundary-table)
+        (forward-word n)
+        (setq selected-text (buffer-substring (point-min) (point)))
+        (setq remaining-text (buffer-substring (point) (point-max))))
+      (minuet--cleanup-suggestion)
+      (insert selected-text)
+      (when (and remaining-text (not (string-empty-p remaining-text)))
+        (minuet--display-suggestion (list remaining-text) 0)))))
+
+;;;###autoload
 (defun minuet-complete-with-minibuffer ()
   "Complete using minibuffer interface."
   (interactive)

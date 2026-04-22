@@ -10,6 +10,7 @@
 - [Selecting a Provider or Model](#selecting-a-provider-or-model)
   - [Understanding Model Speed](#understanding-model-speed)
 - [Prompt](#prompt)
+  - [Prefix-First vs. Suffix-First](#prefix-first-vs-suffix-first)
 - [Configuration](#configuration)
   - [minuet-provider](#minuet-provider)
   - [minuet-context-window](#minuet-context-window)
@@ -21,6 +22,8 @@
   - [minuet-auto-suggestion-block-predicates](#minuet-auto-suggestion-block-predicates)
   - [minuet-auto-suggestion-debounce-delay](#minuet-auto-suggestion-debounce-delay)
   - [minuet-auto-suggestion-throttle-delay](#minuet-auto-suggestion-throttle-delay)
+- [Duet (Next Edit Prediction)](#duet-next-edit-prediction)
+  - [TODO](#todo)
 - [Provider Options](#provider-options)
   - [OpenAI](#openai)
   - [Claude](#claude)
@@ -64,6 +67,8 @@ as dancers move during a minuet.
 - When your typed text matches the start of a suggestion, Minuet keeps the
   completion in sync of your typed text rather than discarding it, to reduce
   unnecessary LLM requests and conserving resources.
+- Support next-edit prediction (NES) via `minuet-duet` commands. This feature is
+  highly experimental.
 
 **With minibuffer frontend**:
 
@@ -78,8 +83,11 @@ package.
 
 https://github.com/user-attachments/assets/04716eab-9acc-46f4-a47d-d6c763eca4c2
 
-<!-- The link above is a showcase video for the virtual text feature, hosted -->
-<!-- externally on GitHub. -->
+**With duet (next edit prediction)**:
+
+https://github.com/user-attachments/assets/45a0dab0-6fc0-4d21-9060-a98597e1ea84
+
+<!-- The links above are showcase videos hosted externally on GitHub. -->
 
 # Requirements
 
@@ -300,15 +308,14 @@ significantly slow down the default provider used by Minuet
 (`openai-fim-compatible` with deepseek). We recommend trying alternative
 providers instead.
 
-We **do not** recommend using thinking models, as this mode
-significantly increases latency—even with the fastest models. However,
-if you choose to use thinking models, please ensure that their
-thinking capabilities are disabled.  Refer to the following examples
-for guidance on how to disable the thinking feature.
+We **do not** recommend using thinking models, as this mode significantly
+increases latency—even with the fastest models. However, if you choose to use
+thinking models, please ensure that their thinking capabilities are disabled.
+Refer to the following examples for guidance on how to disable the thinking
+feature.
 
-Note: You can review the buffer contents in `*minuet*` to identify any
-errors returned by the provider in case of misconfiguration in your
-options.
+Note: You can review the buffer contents in `*minuet*` to identify any errors
+returned by the provider in case of misconfiguration in your options.
 
 ## Understanding Model Speed
 
@@ -342,6 +349,45 @@ Note that `minuet` employs two distinct prompt systems:
 1. A system designed for chat-based LLMs (OpenAI, OpenAI-Compatible, Claude, and
    Gemini)
 2. A separate system designed for Codestral and OpenAI-FIM-compatible models
+
+## Prefix-First vs. Suffix-First
+
+When use chat-based LLMs, there are two ways for constructing the prompt:
+placing the prefix (context before the cursor) before the suffix (context after
+the cursor), or placing the suffix before the prefix.
+
+By default, `minuet` uses the **prefix-first** style for the OpenAI and Gemini
+providers, and the **suffix-first** style for OpenAI-Compatible and Claude
+providers. It is recommended that you experiment with both strategies to
+determine which yields the best results, particularly if you are using an
+OpenAI-compatible provider with various models.
+
+Below is an example code snippet demonstrating how to switch between these two
+prompt construction methods:
+
+<details>
+
+```lisp
+;; Prefix-first style
+(plist-put minuet-openai-compatible-options :fewshots 'minuet-default-fewshots-prefix-first)
+(minuet-set-nested-plist minuet-openai-compatible-options
+                         'minuet-default-prompt-prefix-first
+                         :system :prompt)
+(minuet-set-nested-plist minuet-openai-compatible-options
+                         'minuet-default-chat-input-template-prefix-first
+                         :chat-input :template)
+
+;; Suffix-first style
+(plist-put minuet-openai-compatible-options :fewshots 'minuet-default-fewshots)
+(minuet-set-nested-plist minuet-openai-compatible-options
+                         'minuet-default-prompt
+                         :system :prompt)
+(minuet-set-nested-plist minuet-openai-compatible-options
+                         'minuet-default-chat-input-template
+                         :chat-input :template)
+```
+
+</details>
 
 # Configuration
 
@@ -420,6 +466,69 @@ default is `0.4` seconds.
 The minimum time in seconds between 2 completion requests. The default is `1.0`
 seconds.
 
+# Duet (Next Edit Prediction)
+
+`minuet-duet` is Minuet's highly experimental next-edit prediction (NES)
+feature.
+
+Basic usage is manual. Bind the duet commands to your preferred keymaps, then:
+
+1. Trigger `minuet-duet-predict` to request a prediction for the current edit.
+2. Review the preview rendered in the buffer.
+3. Apply it with `minuet-duet-apply` or discard it with `minuet-duet-dismiss`.
+
+Example config:
+
+```elisp
+;; minuet and minuet-duet are two separate modules
+;; It is recommended to load them separately.
+
+(use-package minuet-duet
+  :bind
+  ;; Global keymap to trigger duet prediction
+  (("C-c d" . #'minuet-duet-predict)
+   :map minuet-duet-active-mode-map
+   ;; These keymaps activate when a duet preview is displayed
+   ("M-a" . #'minuet-duet-apply)      ;; accept the prediction
+   ("M-e" . #'minuet-duet-dismiss))    ;; dismiss the preview
+  :config
+  ;; Set the duet provider (openai, claude, gemini, openai-compatible)
+  (setq minuet-duet-provider 'gemini)
+  (minuet-set-optional-options minuet-duet-gemini-options
+                               :generationConfig
+                               '(:thinkingConfig (:thinkingLevel "minimal"))))
+
+```
+
+This feature is highly experimental:
+
+- It only targets general-purpose LLMs rather than NES-specialized models, as I
+  lack local GPU resources for testing. Currently, `gemini-3-flash-preview`
+  performs well with the prompt structure.
+- Comparable small models from competitors of Google—`claude-haiku-4.5` and
+  `gpt-5.4-mini`—perform poorly.
+- Given completion latency constraints, automatic duet prediction is not
+  implemented.
+
+It is recommended to configure the thinking levels of the models; refer to the
+[provider options](#provider-options) for guidance on managing thinking settings
+for each provider. Note that you should configure `minuet-duet-*-options` rather
+than `minuet-*-options`, as the latter is the provider option for inline
+completion.
+
+Avoid setting a small `max_tokens` or `max_completion_tokens` limit for duet
+requests. Duet expects the model to return the complete rewritten editable
+region, including the cursor marker; if the response is truncated, the parser
+will reject it. Leave the limit unset when the provider allows that, or set it
+large enough to cover the full rewritten region.
+
+## TODO
+
+- [ ] Implement a proper diff mechanism to include recent edit changes in
+      prompts.
+- [ ] Add support for specialized NES models (Zeta, Sweep).
+- [ ] Implement automatically triggered duet prediction.
+
 # Provider Options
 
 You can customize the provider options using `plist-put`, for example:
@@ -445,6 +554,11 @@ request, you can use function `minuet-set-optional-options`:
 (minuet-set-optional-options minuet-openai-options :top_p 0.9)
 ```
 
+`:transform` is a list of functions that receive a plist with `:end-point`,
+`:headers`, and `:body` and return a modified plist (or nil to keep it
+unchanged). The transformed values are used for the actual request, so this is
+the right place to tweak custom headers, payloads, or endpoints.
+
 ## OpenAI
 
 <details>
@@ -453,19 +567,20 @@ Below is the default value:
 
 ```lisp
 (defvar minuet-openai-options
-    `(:model "gpt-4.1-mini"
+    `(:model "gpt-5.4-nano"
       :api-key "OPENAI_API_KEY"
       :system
       (:template minuet-default-system-template
-       :prompt minuet-default-prompt
+       :prompt minuet-default-prompt-prefix-first
        :guidelines minuet-default-guidelines
        :n-completions-template minuet-default-n-completion-template)
-      :fewshots minuet-default-fewshots
+      :fewshots minuet-default-fewshots-prefix-first
       :chat-input
-      (:template minuet-default-chat-input-template
+      (:template minuet-default-chat-input-template-prefix-first
        :language-and-tab minuet--default-chat-input-language-and-tab-function
        :context-before-cursor minuet--default-chat-input-before-cursor-function
        :context-after-cursor minuet--default-chat-input-after-cursor-function)
+      :transform ()
       :optional nil)
     "config options for Minuet OpenAI provider")
 
@@ -476,17 +591,18 @@ request timeout from outputing too many tokens.
 
 ```lisp
 (minuet-set-optional-options minuet-openai-options :max_completion_tokens 128)
-;; Optionally configure the reasoning effort if you are using a thinking model.
-(minuet-set-optional-options minuet-openai-options :reasoning_effort "minimal")
+;; For thinking models.
+(minuet-set-optional-options minuet-openai-options :reasoning_effort "none")
+;; Use "minimal" if your chosen model does not support "none".
 ```
 
 Note: If you intend to use GPT-5 series models (e.g., `gpt-5-mini` or
-`gpt-5-nano`), keep the following points in mind:
+`gpt-5.4-nano`), keep the following points in mind:
 
 1. Use `max_completion_tokens` instead of `max_tokens`.
 2. These models do not support `top_p` or `temperature` adjustments.
-3. Ensure `reasoning_effort` is set to `minimal` and update your request
-   options accordingly.
+3. Disable thinking by setting `reasoning_effort` to `none`, or use `minimal` if
+   your chosen model does not support `none`.
 
 </details>
 
@@ -512,6 +628,7 @@ Below is the default value:
        :language-and-tab minuet--default-chat-input-language-and-tab-function
        :context-before-cursor minuet--default-chat-input-before-cursor-function
        :context-after-cursor minuet--default-chat-input-after-cursor-function)
+      :transform ()
       :optional nil)
     "config options for Minuet Claude provider")
 ```
@@ -537,6 +654,7 @@ Below is the default value:
       :api-key "CODESTRAL_API_KEY"
       :template (:prompt minuet--default-fim-prompt-function
                  :suffix minuet--default-fim-suffix-function)
+      :transform ()
       :optional nil)
     "config options for Minuet Codestral provider")
 ```
@@ -557,6 +675,9 @@ You should register the account and use the service from Google AI Studio
 instead of Google Cloud. You can get an API key via their
 [Google API page](https://makersuite.google.com/app/apikey).
 
+For instructions on using Vertex AI with Gemini models, see
+[recipes.md](./recipes.md).
+
 <details>
 
 The following config is the default.
@@ -576,6 +697,7 @@ The following config is the default.
        :language-and-tab minuet--default-chat-input-language-and-tab-function
        :context-before-cursor minuet--default-chat-input-before-cursor-function
        :context-after-cursor minuet--default-chat-input-after-cursor-function)
+      :transform ()
       :optional nil)
     "config options for Minuet Gemini provider")
 ```
@@ -640,6 +762,7 @@ The following config is the default.
        :language-and-tab minuet--default-chat-input-language-and-tab-function
        :context-before-cursor minuet--default-chat-input-before-cursor-function
        :context-after-cursor minuet--default-chat-input-after-cursor-function)
+      :transform ()
       :optional nil)
     "Config options for Minuet OpenAI compatible provider.")
 ```
@@ -698,6 +821,7 @@ The following config is the default.
       :name "Deepseek"
       :template (:prompt minuet--default-fim-prompt-function
                  :suffix minuet--default-fim-suffix-function)
+      :transform ()
       :optional nil)
     "config options for Minuet OpenAI FIM compatible provider")
 ```

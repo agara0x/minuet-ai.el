@@ -4,7 +4,9 @@
 - [Installation](#installation)
 - [Quick Start: LLM Provider Examples](#quick-start-llm-provider-examples)
   - [Ollama Qwen-2.5-coder:3b](#ollama-qwen-25-coder3b)
-  - [OpenRouter Kimi-K2](#openrouter-kimi-k2)
+  - [OpenRouter Deepseek-V4-Flash](#openrouter-deepseek-v4-flash)
+  - [Opencode Go Deepseek-V4-Flash](#opencode-go-deepseek-v4-flash)
+  - [Deepseek Deepseek-V4-Flash](#deepseek-deepseek-v4-flash)
   - [Llama.cpp Qwen-2.5-coder:1.5b](#llamacpp-qwen-25-coder15b)
 - [API Keys](#api-keys)
 - [Selecting a Provider or Model](#selecting-a-provider-or-model)
@@ -23,6 +25,7 @@
   - [minuet-auto-suggestion-debounce-delay](#minuet-auto-suggestion-debounce-delay)
   - [minuet-auto-suggestion-throttle-delay](#minuet-auto-suggestion-throttle-delay)
 - [Duet (Next Edit Prediction)](#duet-next-edit-prediction)
+  - [Context Options](#context-options)
   - [TODO](#todo)
 - [Provider Options](#provider-options)
   - [OpenAI](#openai)
@@ -180,7 +183,7 @@ preferred package managers.
 
 </details>
 
-## OpenRouter Kimi-K2
+## OpenRouter Deepseek-V4-Flash
 
 <details>
 
@@ -194,13 +197,61 @@ preferred package managers.
 
     (plist-put minuet-openai-compatible-options :end-point "https://openrouter.ai/api/v1/chat/completions")
     (plist-put minuet-openai-compatible-options :api-key "OPENROUTER_API_KEY")
-    (plist-put minuet-openai-compatible-options :model "moonshotai/kimi-k2")
+    (plist-put minuet-openai-compatible-options :model "deepseek/deepseek-v4-flash")
 
 
     ;; Prioritize throughput for faster completion
     (minuet-set-optional-options minuet-openai-compatible-options :provider '(:sort "throughput"))
+    ;; Disable thinking to avoid first token latency
+    (minuet-set-optional-options minuet-openai-compatible-options :reasoning_effort "none")
     (minuet-set-optional-options minuet-openai-compatible-options :max_tokens 56)
     (minuet-set-optional-options minuet-openai-compatible-options :top_p 0.9))
+```
+
+</details>
+
+## Opencode Go Deepseek-V4-Flash
+
+<details>
+
+```elisp
+(use-package minuet
+    :config
+    (setq minuet-provider 'openai-compatible)
+    (setq minuet-request-timeout 2.5)
+    (setq minuet-auto-suggestion-throttle-delay 1.5) ;; Increase to reduce costs and avoid rate limits
+    (setq minuet-auto-suggestion-debounce-delay 0.6) ;; Increase to reduce costs and avoid rate limits
+
+    (plist-put minuet-openai-compatible-options :end-point "https://opencode.ai/zen/go/v1/chat/completions")
+    (plist-put minuet-openai-compatible-options :api-key "OPENCODE_GO_API_KEY")
+    (plist-put minuet-openai-compatible-options :model "deepseek-v4-flash")
+
+
+    ;; Disable thinking to avoid first token latency
+    (minuet-set-optional-options minuet-openai-compatible-options :thinking '(:type "disabled")
+    (minuet-set-optional-options minuet-openai-compatible-options :max_tokens 56)
+    (minuet-set-optional-options minuet-openai-compatible-options :top_p 0.9))
+```
+
+</details>
+
+## Deepseek Deepseek-V4-Flash
+
+<details>
+
+```elisp
+(use-package minuet
+    :config
+    (setq minuet-provider 'openai-fim-compatible)
+    (setq minuet-auto-suggestion-throttle-delay 1.5) ;; Increase to reduce costs and avoid rate limits
+    (setq minuet-auto-suggestion-debounce-delay 0.6) ;; Increase to reduce costs and avoid rate limits
+
+    (plist-put minuet-openai-fim-compatible-options :end-point "https://api.deepseek.com/beta/completions")
+    (plist-put minuet-openai-fim-compatible-options :api-key "DEEPSEEK_API_KEY")
+    (plist-put minuet-openai-fim-compatible-options :model "deepseek-v4-flash")
+
+    (minuet-set-optional-options minuet-openai-fim-compatible-options :max_tokens 56)
+    (minuet-set-optional-options minuet-openai-fim-compatible-options :top_p 0.9))
 ```
 
 </details>
@@ -297,11 +348,10 @@ completion request.
 # Selecting a Provider or Model
 
 The `gemini-2.0-flash` and `codestral` models offer high-quality output with
-free and fast processing. For optimal quality, though with significantly slower
-generation speed, consider using the `deepseek-chat` model, which is compatible
-with both `openai-fim-compatible` and `openai-compatible` providers. For local
-LLM inference, you can deploy either `qwen-2.5-coder` or `deepseek-coder-v2`
-through Ollama using the `openai-fim-compatible` provider.
+free and fast processing. The `deepseek-v4-flash` model, used with the
+`openai_fim_compatible` provider, is an alternative for low-cost APIs and fast
+inference. For local LLM inference, you can deploy either `qwen-2.5-coder` or
+`deepseek-coder-v2` through Ollama using the `openai-fim-compatible` provider.
 
 Note: as of January 27, 2025, the high server demand from deepseek may
 significantly slow down the default provider used by Minuet
@@ -356,11 +406,11 @@ When use chat-based LLMs, there are two ways for constructing the prompt:
 placing the prefix (context before the cursor) before the suffix (context after
 the cursor), or placing the suffix before the prefix.
 
-By default, `minuet` uses the **prefix-first** style for the OpenAI and Gemini
-providers, and the **suffix-first** style for OpenAI-Compatible and Claude
-providers. It is recommended that you experiment with both strategies to
-determine which yields the best results, particularly if you are using an
-OpenAI-compatible provider with various models.
+By default, `minuet` uses the **prefix-first** style for the OpenAI, Gemini, and
+OpenAI-Compatible provider (with `deepseek-v4-flash` as the default model), and
+the **suffix-first** style for Claude providers. It is recommended that you
+experiment with both strategies to determine which yields the best results,
+particularly if you are using an OpenAI-compatible provider with various models.
 
 Below is an example code snippet demonstrating how to switch between these two
 prompt construction methods:
@@ -521,6 +571,18 @@ requests. Duet expects the model to return the complete rewritten editable
 region, including the cursor marker; if the response is truncated, the parser
 will reject it. Leave the limit unset when the provider allows that, or set it
 large enough to cover the full rewritten region.
+
+## Context Options
+
+`minuet-duet-non-editable-region-context-window` controls the maximum total
+characters kept from the non-editable regions before and after the editable
+region. The default is 40000. The editable region itself is not truncated by
+this option.
+
+`minuet-duet-non-editable-region-context-ratio` controls how much of that
+non-editable context window is kept before the editable region when truncation
+is needed. The default is 0.75, keeping more surrounding context before the
+edit.
 
 ## TODO
 
@@ -750,15 +812,15 @@ The following config is the default.
 (defvar minuet-openai-compatible-options
     `(:end-point "https://openrouter.ai/api/v1/chat/completions"
       :api-key "OPENROUTER_API_KEY"
-      :model "mistralai/devstral-small"
+      :model "deepseek/deepseek-v4-flash"
       :system
       (:template minuet-default-system-template
-       :prompt minuet-default-prompt
+       :prompt minuet-default-prompt-prefix-first
        :guidelines minuet-default-guidelines
        :n-completions-template minuet-default-n-completion-template)
-      :fewshots minuet-default-fewshots
+      :fewshots minuet-default-fewshots-prefix-first
       :chat-input
-      (:template minuet-default-chat-input-template
+      (:template minuet-default-chat-input-template-prefix-first
        :language-and-tab minuet--default-chat-input-language-and-tab-function
        :context-before-cursor minuet--default-chat-input-before-cursor-function
        :context-after-cursor minuet--default-chat-input-after-cursor-function)
@@ -773,18 +835,24 @@ request timeout from outputing too many tokens.
 ```lisp
 (minuet-set-optional-options minuet-openai-compatible-options :max_tokens 256)
 (minuet-set-optional-options minuet-openai-compatible-options :top_p 0.9)
-;; Optionally configure the reasoning effort if you are using a thinking model.
-(minuet-set-optional-options
-  minuet-openai-compatible-options
-  :reasoning
-  ;; '(:max_tokens 0) for Anthropic style
-  '(:effort "minimal")) ; for OpenAI style
-;; Alternatively, disable reasoning entirely if the model supports it.
-(minuet-set-optional-options
-  minuet-openai-compatible-options
-  :reasoning
-  '(:enabled :false))
 ```
+
+**Disabling thinking for reasoning models:**
+
+| Provider             | Configuration                                                              |
+| -------------------- | -------------------------------------------------------------------------- |
+| **OpenRouter**       | `reasoning = { effort = 'none' }` (or `'minimal'`, depending on the model) |
+| **DeepSeek API**     | `thinking = { type = 'disabled' }`                                         |
+| **Various Provider** | `reasoning_effort = 'none'`                                                |
+
+````lisp
+;; or "minimal", depending on the model (OpenRouter)
+(minuet-set-optional-options minuet-openai-compatible-options :reasoning '(:effort none))
+;; or "minimal", depending on the model (various providers)
+(minuet-set-optional-options minuet-openai-compatible-options :reasoning_effort "none")
+;; DeepSeek API
+(minuet-set-optional-options minuet-openai-compatible-options :thinking '(:type "disabled"))
+````
 
 </details>
 
@@ -815,7 +883,7 @@ The following config is the default.
 
 ```lisp
 (defvar minuet-openai-fim-compatible-options
-    '(:model "deepseek-chat"
+    '(:model "deepseek-v4-flash"
       :end-point "https://api.deepseek.com/beta/completions"
       :api-key "DEEPSEEK_API_KEY"
       :name "Deepseek"
